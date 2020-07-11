@@ -180,8 +180,8 @@ def main():
     plt.savefig(fname='Q_1_W_vs_PnL')
     plt.show()
     plt.close()
-    print(np.array(pnl_deque))
-    print('Best W* is {}'.format(np.argmax(np.array(pnl_deque), axis=1)))
+    # Have to add 5 to it since our initial moving window is 5
+    print('Best W* is {}'.format(np.add(np.argmax(np.array(pnl_deque), 5))))
 
 if __name__ == "__main__":
     main()
