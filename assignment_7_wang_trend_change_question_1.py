@@ -1,34 +1,8 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
 from scipy.stats import linregress
 from collections import deque
 import matplotlib.pyplot as plt
-
-def print_confusion_matrix(Y_2019, confusion_matrix_df):
-    '''
-    Y_2019: input vector for the confusion matrix
-    confusion_matrix_df: the input confusion df
-    '''
-    total_data_points = len(Y_2019)
-    true_positive_number = confusion_matrix_df['Predicted: GREEN']['Actual: GREEN']
-    true_positive_rate = np.round(np.multiply(np.divide(true_positive_number, total_data_points), 100), 2)
-    true_negative_number = confusion_matrix_df['Predicted: RED']['Actual: RED']
-    true_negative_rate = np.round(np.multiply(np.divide(true_negative_number, total_data_points), 100), 2)
-    print("True positive rate: {}%".format(true_positive_rate))
-    print("True negative rate: {}%".format(true_negative_rate))
-
-
-def make_trade(cash, open, close):
-    '''
-    cash: float of cash on hand
-    open: float of open price
-    close: float of close price
-    returns: The cash made from a long position from open to close
-    '''
-    shares = np.divide(cash, open)
-    return np.multiply(shares, close)
 
 def trading_strategy(trading_df, prediction_label, weekly_balance=100):
     '''
@@ -121,7 +95,7 @@ def get_windowed_slice_and_fit(df, W=5):
     '''
     all_predictions = deque()
     df_values = df['Close']
-
+    df_values.reset_index(drop=True, inplace=True)
     for i in range(W-1, len(df_values)-2):
         # Calculate coefficients given a W
         slope, intercept, r_value, p_value, std_err = linregress(np.arange(i-W+1, i+1), df_values.loc[i-W+1:i].values.T.astype(float))
@@ -136,14 +110,13 @@ def get_windowed_slice_and_fit(df, W=5):
             all_predictions.append('RED')
     df_prediction = pd.DataFrame(np.array(all_predictions), columns=['Regression Predictions'])
     df_prediction.index += W+1
+
     return df_prediction
 
 def main():
     ticker='WMT'
     file_name = '{}_weekly_return_volatility.csv'.format(ticker)
     file_name_self_labels = 'WMT_Labeled_Weeks_Self.csv'
-    iris_dataset = 'iris.data'
-
     # Read from that file for answering our questions
     df = pd.read_csv(file_name_self_labels, encoding='ISO-8859-1')
     df_2018 = df[df['Year'] == 2018]
@@ -163,6 +136,7 @@ def main():
     print('Assumptions:')
     print('If I have more than $100 then I will only use $100 to open a position')
     print('If I have less than $100, I will only use that amount of money to trade')
+    print('Question 1 takes some time to run, so I have split up the scripts for the first assignment.')
 
     pnl_deque = deque()
     for W in range(5, 31):
@@ -181,7 +155,7 @@ def main():
     plt.show()
     plt.close()
     # Have to add 5 to it since our initial moving window is 5
-    print('Best W* is {}'.format(np.add(np.argmax(np.array(pnl_deque), 5))))
+    print('Best W* is {}'.format(np.add(np.argmax(np.array(pnl_deque)), 5)))
 
 if __name__ == "__main__":
     main()
