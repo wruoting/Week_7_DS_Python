@@ -109,9 +109,24 @@ def main():
     # Assumptions:
     # K must be: 2 < k < n-1, because we cannot have a split of say 1 and 2....n, since one point cannot make a linear regression
     print('Question 1:')
+    print('For the year 2018:')
+    print('The candidate days are listed as the "Split Index" of the table below. A split index of 10 would indicate that the month is split into 10 and n-10 days')
     data_2018_f_table = split_data(df_2018)
     print(data_2018_f_table)
-    print('There is significant change in price trending for the following months: {}'.format(data_2018_f_table[data_2018_f_table["Is Critical"] == 1][["Month"]].values.T.flatten()))
+    print('The critical months were:')
+    print(data_2018_f_table[data_2018_f_table["Is Critical"] == 1])
+    print('For the year 2019:')
+    print('The candidate days are listed as the "Split Index" of the table below. A split index of 10 would indicate that the month is split into 10 and n-10 days')
+    data_2019_f_table = split_data(df_2019)
+    print(data_2019_f_table)
+    print('The critical months were:')
+    print(data_2019_f_table[data_2019_f_table["Is Critical"] == 1])
 
+    print('Question 2:')
+    print('In 2018, there is significant change in price trending for the following months: {}'.format(data_2018_f_table[data_2018_f_table["Is Critical"] == 1][["Month"]].values.T.flatten()))
+    print('In 2019, there is significant change in price trending for the following months: {}'.format(data_2019_f_table[data_2019_f_table["Is Critical"] == 1][["Month"]].values.T.flatten()))
+
+    print('Question 3')
+    print('There are more changes in year 2019, or year 2. This could imply a more volatile year of trading, as there are more significant shifts in trend.')
 if __name__ == "__main__":
     main()
