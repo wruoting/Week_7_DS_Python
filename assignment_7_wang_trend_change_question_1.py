@@ -155,7 +155,6 @@ def get_windowed_slice_and_fit(df, W=5):
 
 def main():
     ticker='WMT'
-    file_name = '{}_weekly_return_volatility.csv'.format(ticker)
     file_name_self_labels = 'WMT_Labeled_Weeks_Self.csv'
     # Read from that file for answering our questions
     df = pd.read_csv(file_name_self_labels, encoding='ISO-8859-1')
