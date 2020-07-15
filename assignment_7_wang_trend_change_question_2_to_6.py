@@ -155,7 +155,7 @@ def main():
     question_3(pnl_table_2018)
     print('There were slightly more opened positions in 2018 compared to 2019 (40 to 34), with significantly more short positions in 2018 (25 to 15)')
     print('Comparing to Question 4: ')
-    pnl_from_long, pnl_from_short = get_pnl(pnl_table)
+    pnl_from_long, pnl_from_short = get_pnl(pnl_table_2018)
     print("Average P/L from longs: ${}".format(np.round(pnl_from_long['Balance'].mean(), 2)))
     print("Average P/L from shorts: ${}".format(np.round(pnl_from_short['Balance'].mean(), 2)))
     print('Compared to 2019, 2018 saw profits, which means that this model fitted for 2018 works for 2018, but not as well for 2019. This indicates that the window used for 2019 was most likely ')
