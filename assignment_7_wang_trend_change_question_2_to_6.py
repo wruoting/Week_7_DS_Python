@@ -3,102 +3,7 @@ import numpy as np
 from scipy.stats import linregress
 from collections import deque
 import matplotlib.pyplot as plt
-
-def trading_strategy_with_stats(trading_df, prediction_label, weekly_balance=100):
-    '''
-    trading_df: dataframe of relevant weekly data
-    prediction_label: the label for which we're going to trade off of
-    returns: A df of trades made based on Predicted Labels. Also gives whether transactions were made along with other stats.
-    '''
-    # The daily balance we will be using
-    total_balance = weekly_balance
-    trading_history = deque()
-    trading_days_index = 0
-    # Boolean indicating whether we have a position or not
-    position = False
-    # The number of shares
-    shares = 0
-    # String indicating what position was taken
-    taken_position = ''
-    while(trading_days_index < len(trading_df.index)):
-        trading_label = trading_df.iloc[trading_days_index][[prediction_label]].values[0]
-        if trading_days_index > 0:
-            previous_trading_label = trading_df.iloc[trading_days_index-1][[prediction_label]].values[0]
-        else:
-            previous_trading_label = None
-        trading_value =  trading_df.iloc[trading_days_index][['Close']].values[0]
-        # If we have money and no position, we immediately take a position based on the day
-        if total_balance != 0 or shares != 0:
-            if not position:
-                # If it's the last day and we have no position, we can't trade. Otherwise we trade
-                if trading_days_index != len(trading_df.index)-1:
-                    position = True
-                    # A buy and hold
-                    if  trading_label == 'GREEN':
-                        # If I have more than $100, I will only trade with $100
-                        if total_balance > 100:
-                            shares = np.divide(100, trading_value)
-                            total_balance = total_balance - 100
-                        # If I have less than 100, I can only trade with as much as I have
-                        else:
-                            shares = np.divide(total_balance, trading_value)
-                            total_balance = 0
-                        taken_position = 'LONG'
-                    # A short
-                    else:
-                        # I can always sell short because I can borrow money
-                        # I essentially need to buy these shares back
-                        shares = np.negative(np.divide(100, trading_value))
-                        # Add 100 dollars of shares short
-                        total_balance = total_balance + 100
-                        taken_position = 'SHORT'
-                else:
-                    taken_position = 'NONE'
-            # Otherwise we have a position
-            else:
-                # If it's the last day and we have a position, we must close out the position
-                if trading_days_index == len(trading_df.index) - 1:
-                    # If I'm long on the last day
-                    if shares > 0:
-                        total_balance = total_balance + np.multiply(shares, trading_value)
-                        taken_position = 'LONG TO SELL'
-                    # If I'm short on the last day
-                    elif shares < 0:
-                        buy_back_shares = np.abs(shares)
-                        total_balance = total_balance - np.multiply(buy_back_shares, trading_value)
-                        taken_position = 'SHORT TO BUY'
-                else:
-                    # If we have previous trading days that are the same, we can keep going
-                    if (trading_label == 'GREEN' and previous_trading_label == 'GREEN') or (trading_label == 'RED' and previous_trading_label == 'RED'):
-                        taken_position = 'NONE'
-                    # We have a short position from yesterday, and we must close it by buying shares back and subtracting from our total
-                    elif trading_label == 'GREEN' and previous_trading_label == 'RED':
-                        buy_back_shares = np.abs(shares)
-                        total_balance = total_balance - np.multiply(buy_back_shares, trading_value)
-                        shares = 0
-                        position = False
-                        taken_position = 'SHORT TO BUY'
-                    # We have a long position from yesterday, and we must close it by selling shares and adding to our total
-                    elif trading_label == 'RED' and previous_trading_label == 'GREEN':
-                        total_balance = total_balance + np.multiply(shares, trading_value)
-                        shares = 0
-                        position = False
-                        taken_position = 'LONG TO SELL'
-
-        # Regardless of whether we made a trade or not, we append the weekly cash and week over
-        trading_history.append([trading_df.iloc[trading_days_index][['Year']].values[0],
-                    trading_df.iloc[trading_days_index][['Week_Number']].values[0],
-                    trading_df.iloc[trading_days_index][['Close']].values[0],
-                    total_balance, taken_position, shares])
-        # If we have no money, then we stop trading
-        trading_days_index = trading_days_index+1
-                
-        
-    trading_hist_df = pd.DataFrame(np.array(trading_history), columns=['Year', 'Week_Number', 'Price', 'Balance', 'Position', 'Shares'])
-    trading_hist_df['Balance'] = np.round(trading_hist_df[['Balance']].astype(float), 2)
-
-    return trading_hist_df
-
+from assignment_7_wang_trend_change_question_1 import get_pnl, trading_strategy_with_stats
 
 def calculate_average_number_of_days_per_trade(df):
     '''
@@ -194,34 +99,6 @@ def question_3(pnl_table):
     print('The number of long positions opened is {}'.format(all_long_positions))
     print('The number of short positions opened is {}'.format(all_short_positions))
 
-def question_4(pnl_table):
-    '''
-    pnl_table: the dataframe our profit and loss
-    return: None
-    '''
-    # Calculate all the rows where we have a LONG to LONG TO SELL
-    # We have to normalize indices to subtract properly
-    long_open = pnl_table.query('Position in ["LONG"]')
-    long_open.reset_index(drop=True, inplace=True)
-    long_to_sell = pnl_table.query('Position in ["LONG TO SELL"]')
-    long_to_sell.reset_index(drop=True, inplace=True)
-
-    shares_bought_vector = pd.DataFrame(np.multiply(long_open[["Shares"]].values.astype(float), long_open[["Price"]].values.astype(float)), columns=['Balance'])
-    # Do the same for short positions
-    short_open = pnl_table.query('Position in ["SHORT"]')
-    short_open.reset_index(drop=True, inplace=True)
-    short_to_buy = pnl_table.query('Position in ["SHORT TO BUY"]')
-    short_to_buy.reset_index(drop=True, inplace=True)
-    # PNL from longs is the total balance we have at the end of a long transaction minus the balance we had in cash after first making that long transaction 
-    # minus the initial seed money to buy shares (sometimes less than 100)
-    
-    pnl_from_long = long_to_sell[['Balance']] - long_open[['Balance']] - shares_bought_vector
-
-    # PNL from short is the balance we have at the end minus the difference between the open balance and our profit from the initial short
-    pnl_from_short = short_to_buy[['Balance']] - (short_open[['Balance']] - 100)
-    print("Average P/L from longs: ${}".format(np.round(pnl_from_long['Balance'].mean(), 2)))
-    print("Average P/L from shorts: ${}".format(np.round(pnl_from_short['Balance'].mean(), 2)))
-
 
 def main():
     ticker='WMT'
@@ -245,7 +122,7 @@ def main():
     print('The R squared value describes the correlation coefficient of a relationship between the day of the year and price. A strong negative correlation indicates a ')
     print('negative price movement over time, and a strong positive correlation indicates a price movement upwards over time. Periods of the stock where there are clear drops shows ')
     print('a negative correlation, but only after a window of time. The R squared movement is lagged due to the moving window effect. However, the movements of the R squared values and prices ')
-    print('can still be observed.')
+    print('can still be observed. There is an average R squared of 0.3 which indicates that the stock trends up with time, as seen by the ticker movement.')
 
     print('\nQuestion 3:')
     # Create some regression prediction tables
@@ -254,7 +131,9 @@ def main():
     question_3(pnl_table)
 
     print('\nQuestion 4:')
-    question_4(pnl_table)
+    pnl_from_long, pnl_from_short = get_pnl(pnl_table)
+    print("Average P/L from longs: ${}".format(np.round(pnl_from_long['Balance'].mean(), 2)))
+    print("Average P/L from shorts: ${}".format(np.round(pnl_from_short['Balance'].mean(), 2)))
 
     print('\nQuestion 5:')
     print('I am including the day that I start the position and the day that I close the position')
@@ -276,7 +155,9 @@ def main():
     question_3(pnl_table_2018)
     print('There were slightly more opened positions in 2018 compared to 2019 (40 to 34), with significantly more short positions in 2018 (25 to 15)')
     print('Comparing to Question 4: ')
-    question_4(pnl_table_2018)
+    pnl_from_long, pnl_from_short = get_pnl(pnl_table)
+    print("Average P/L from longs: ${}".format(np.round(pnl_from_long['Balance'].mean(), 2)))
+    print("Average P/L from shorts: ${}".format(np.round(pnl_from_short['Balance'].mean(), 2)))
     print('Compared to 2019, 2018 saw profits, which means that this model fitted for 2018 works for 2018, but not as well for 2019. This indicates that the window used for 2019 was most likely ')
     print('not optimal. A different window would most likely provide better results.')
     print('Comparing to Question 5: ')

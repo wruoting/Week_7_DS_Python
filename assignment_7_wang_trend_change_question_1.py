@@ -4,11 +4,11 @@ from scipy.stats import linregress
 from collections import deque
 import matplotlib.pyplot as plt
 
-def trading_strategy(trading_df, prediction_label, weekly_balance=100):
+def trading_strategy_with_stats(trading_df, prediction_label, weekly_balance=100):
     '''
     trading_df: dataframe of relevant weekly data
     prediction_label: the label for which we're going to trade off of
-    returns: A df of trades made based on Predicted Labels
+    returns: A df of trades made based on Predicted Labels. Also gives whether transactions were made along with other stats.
     '''
     # The daily balance we will be using
     total_balance = weekly_balance
@@ -18,6 +18,8 @@ def trading_strategy(trading_df, prediction_label, weekly_balance=100):
     position = False
     # The number of shares
     shares = 0
+    # String indicating what position was taken
+    taken_position = ''
     while(trading_days_index < len(trading_df.index)):
         trading_label = trading_df.iloc[trading_days_index][[prediction_label]].values[0]
         if trading_days_index > 0:
@@ -41,6 +43,7 @@ def trading_strategy(trading_df, prediction_label, weekly_balance=100):
                         else:
                             shares = np.divide(total_balance, trading_value)
                             total_balance = 0
+                        taken_position = 'LONG'
                     # A short
                     else:
                         # I can always sell short because I can borrow money
@@ -48,6 +51,9 @@ def trading_strategy(trading_df, prediction_label, weekly_balance=100):
                         shares = np.negative(np.divide(100, trading_value))
                         # Add 100 dollars of shares short
                         total_balance = total_balance + 100
+                        taken_position = 'SHORT'
+                else:
+                    taken_position = 'NONE'
             # Otherwise we have a position
             else:
                 # If it's the last day and we have a position, we must close out the position
@@ -55,37 +61,71 @@ def trading_strategy(trading_df, prediction_label, weekly_balance=100):
                     # If I'm long on the last day
                     if shares > 0:
                         total_balance = total_balance + np.multiply(shares, trading_value)
+                        taken_position = 'LONG TO SELL'
                     # If I'm short on the last day
                     elif shares < 0:
                         buy_back_shares = np.abs(shares)
                         total_balance = total_balance - np.multiply(buy_back_shares, trading_value)
+                        taken_position = 'SHORT TO BUY'
                 else:
-                    # If we have previous trading days that are the same, we can keep going (No code necessary)
+                    # If we have previous trading days that are the same, we can keep going
+                    if (trading_label == 'GREEN' and previous_trading_label == 'GREEN') or (trading_label == 'RED' and previous_trading_label == 'RED'):
+                        taken_position = 'NONE'
                     # We have a short position from yesterday, and we must close it by buying shares back and subtracting from our total
-                    if trading_label == 'GREEN' and previous_trading_label == 'RED':
+                    elif trading_label == 'GREEN' and previous_trading_label == 'RED':
                         buy_back_shares = np.abs(shares)
                         total_balance = total_balance - np.multiply(buy_back_shares, trading_value)
                         shares = 0
                         position = False
+                        taken_position = 'SHORT TO BUY'
                     # We have a long position from yesterday, and we must close it by selling shares and adding to our total
                     elif trading_label == 'RED' and previous_trading_label == 'GREEN':
                         total_balance = total_balance + np.multiply(shares, trading_value)
                         shares = 0
                         position = False
+                        taken_position = 'LONG TO SELL'
 
         # Regardless of whether we made a trade or not, we append the weekly cash and week over
         trading_history.append([trading_df.iloc[trading_days_index][['Year']].values[0],
                     trading_df.iloc[trading_days_index][['Week_Number']].values[0],
-                    total_balance])
+                    trading_df.iloc[trading_days_index][['Close']].values[0],
+                    total_balance, taken_position, shares])
         # If we have no money, then we stop trading
         trading_days_index = trading_days_index+1
                 
         
-    trading_hist_df = pd.DataFrame(np.array(trading_history), columns=['Year', 'Week_Number', 'Balance'])
+    trading_hist_df = pd.DataFrame(np.array(trading_history), columns=['Year', 'Week_Number', 'Price', 'Balance', 'Position', 'Shares'])
     trading_hist_df['Balance'] = np.round(trading_hist_df[['Balance']].astype(float), 2)
 
     return trading_hist_df
 
+
+def get_pnl(pnl_table):
+    '''
+    pnl_table: the dataframe our profit and loss
+    return: a tuple of pnls from short and long
+    '''
+    # Calculate all the rows where we have a LONG to LONG TO SELL
+    # We have to normalize indices to subtract properly
+    long_open = pnl_table.query('Position in ["LONG"]')
+    long_open.reset_index(drop=True, inplace=True)
+    long_to_sell = pnl_table.query('Position in ["LONG TO SELL"]')
+    long_to_sell.reset_index(drop=True, inplace=True)
+
+    shares_bought_vector = pd.DataFrame(np.multiply(long_open[["Shares"]].values.astype(float), long_open[["Price"]].values.astype(float)), columns=['Balance'])
+    # Do the same for short positions
+    short_open = pnl_table.query('Position in ["SHORT"]')
+    short_open.reset_index(drop=True, inplace=True)
+    short_to_buy = pnl_table.query('Position in ["SHORT TO BUY"]')
+    short_to_buy.reset_index(drop=True, inplace=True)
+    # PNL from longs is the total balance we have at the end of a long transaction minus the balance we had in cash after first making that long transaction 
+    # minus the initial seed money to buy shares (sometimes less than 100)
+    
+    pnl_from_long = long_to_sell[['Balance']] - long_open[['Balance']] - shares_bought_vector
+
+    # PNL from short is the balance we have at the end minus the difference between the open balance and our profit from the initial short
+    pnl_from_short = short_to_buy[['Balance']] - (short_open[['Balance']] - 100)
+    return pnl_from_long, pnl_from_short
 
 
 def get_windowed_slice_and_fit(df, W=5):
@@ -143,14 +183,17 @@ def main():
         print('Processing W = {} out of 30'.format(W))
         df_trading_days = pd.DataFrame(df_2018.iloc[W+1: len(df_2018.index)][['Year', 'Week_Number', 'Close']], columns=['Year', 'Week_Number', 'Close']).join(get_windowed_slice_and_fit(df_2018, W))
         df_trading_days.reset_index(drop=True, inplace=True)
-        # this gives the pnl table. We only care about the last day
-        pnl = trading_strategy(df_trading_days, 'Regression Predictions')
-        pnl_deque.append(np.round(np.subtract(pnl.iloc[-1]['Balance'], 100), 2))
+        # This gives the pnl table
+        pnl = trading_strategy_with_stats(df_trading_days, 'Regression Predictions')
+        # Grab the means
+        pnl_long, pnl_short = get_pnl(pnl)
+        total_pnl = pnl_long.append(pnl_short)
+        pnl_deque.append(np.round(total_pnl.mean(), 2))
 
     plt.plot(np.arange(5, 31), np.array(pnl_deque))
     plt.title('Moving Window Trading Strategy WMT')
     plt.xlabel('W')
-    plt.ylabel('P/L ($)')
+    plt.ylabel('Average P/L per trade ($)')
     plt.savefig(fname='Q_1_W_vs_PnL')
     plt.show()
     plt.close()
